@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qazaq Oil POS | Interactive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .qazaq-green { background-color: #006837; }
+        .bg-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex">
+
+    <aside class="w-72 qazaq-green text-white p-6 hidden lg:flex flex-col shadow-2xl">
+        <div class="mb-10 flex items-center gap-3">
+            <div class="bg-yellow-400 p-2 rounded-lg text-green-900"><i class="fas fa-gas-pump"></i></div>
+            <h1 class="text-xl font-bold tracking-tighter">QAZAQ OIL POS</h1>
+        </div>
+
+        <div class="bg-white/10 p-5 rounded-2xl border border-white/10">
+            <h3 class="text-sm font-semibold mb-4 uppercase text-yellow-400">Новая продажа</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs opacity-70">Тип товара</label>
+                    <select id="itemType" class="w-full bg-white/10 border border-white/20 rounded-lg p-2 mt-1 focus:outline-none focus:ring-2 focus:ring-yellow-400">
+                        <option value="АИ-92" data-price="205" class="text-black">АИ-92 (205 ₸)</option>
+                        <option value="АИ-95" data-price="255" class="text-black">АИ-95 (255 ₸)</option>
+                        <option value="ДТ" data-price="295" class="text-black">ДТ (295 ₸)</option>
+                        <option value="Кофе" data-price="850" class="text-black">Кофе (850 ₸)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs opacity-70">Кол-во (л/шт)</label>
+                    <input type="number" id="quantity" value="10" class="w-full bg-white/10 border border-white/20 rounded-lg p-2 mt-1 focus:outline-none">
+                </div>
+                <button onclick="addTransaction()" class="w-full bg-yellow-400 text-green-900 font-bold py-3 rounded-xl hover:scale-105 transition-transform active:scale-95">
+                    ПРОБИТЬ ЧЕК
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 p-4 lg:p-8 overflow-y-auto">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium">Выручка за сегодня</p>
+                        <h2 id="totalRevenue" class="text-3xl font-black text-gray-800">0 ₸</h2>
+                    </div>
+                    <div class="bg-green-100 text-green-600 p-4 rounded-2xl"><i class="fas fa-wallet fa-lg"></i></div>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium">Пролито топлива</p>
+                        <h2 id="totalFuel" class="text-3xl font-black text-gray-800">0 л</h2>
+                    </div>
+                    <div class="bg-yellow-100 text-yellow-600 p-4 rounded-2xl"><i class="fas fa-oil-can fa-lg"></i></div>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium">Всего чеков</p>
+                        <h2 id="orderCount" class="text-3xl font-black text-gray-800">0</h2>
+                    </div>
+                    <div class="bg-blue-100 text-blue-600 p-4 rounded-2xl"><i class="fas fa-receipt fa-lg"></i></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                <h3 class="font-bold text-gray-700 mb-4">График продаж (KZT)</h3>
+                <canvas id="salesChart" height="120"></canvas>
+            </div>
+
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-gray-700">История операций</h3>
+                    <button onclick="clearData()" class="text-xs text-red-500 hover:underline">Сброс</button>
+                </div>
+                <div id="transactionList" class="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                    </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let transactions = JSON.parse(localStorage.getItem('qazaq_sales')) || [];
+        let myChart;
+
+        function initChart() {
+            const ctx = document.getElementById('salesChart').getContext('2d');
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: transactions.map(t => t.time),
+                    datasets: [{
+                        label: 'Сумма чека',
+                        data: transactions.map(t => t.total),
+                        borderColor: '#006837',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: true,
+                        backgroundColor: 'rgba(0, 104, 55, 0.05)'
+                    }]
+                },
+                options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        function updateUI() {
+            let totalRev = 0;
+            let totalF = 0;
+            const list = document.getElementById('transactionList');
+            list.innerHTML = '';
+
+            transactions.forEach((t, index) => {
+                totalRev += t.total;
+                if(t.type !== 'Кофе') totalF += parseFloat(t.qty);
+
+                list.innerHTML = `
+                    <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100 animate-fade-in">
+                        <div>
+                            <p class="font-bold text-sm text-gray-800">${t.type}</p>
+                            <p class="text-[10px] text-gray-400">${t.time} • ${t.qty} ед.</p>
+                        </div>
+                        <p class="font-black text-green-700">${t.total.toLocaleString()} ₸</p>
+                    </div>
+                ` + list.innerHTML;
+            });
+
+            document.getElementById('totalRevenue').innerText = totalRev.toLocaleString() + ' ₸';
+            document.getElementById('totalFuel').innerText = totalF.toLocaleString() + ' л';
+            document.getElementById('orderCount').innerText = transactions.length;
+
+            // Обновление графика
+            myChart.data.labels = transactions.slice(-10).map(t => t.time);
+            myChart.data.datasets[0].data = transactions.slice(-10).map(t => t.total);
+            myChart.update();
+
+            localStorage.setItem('qazaq_sales', JSON.stringify(transactions));
+        }
+
+        function addTransaction() {
+            const select = document.getElementById('itemType');
+            const type = select.value;
+            const price = select.options[select.selectedIndex].getAttribute('data-price');
+            const qty = document.getElementById('quantity').value;
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const newSale = {
+                type: type,
+                qty: qty,
+                total: price * qty,
+                time: time
+            };
+
+            transactions.push(newSale);
+            updateUI();
+        }
+
+        function clearData() {
+            if(confirm('Очистить все данные за смену?')) {
+                transactions = [];
+                updateUI();
+            }
+        }
+
+        window.onload = () => {
+            initChart();
+            updateUI();
+        };
+    </script>
+</body>
+</html>
